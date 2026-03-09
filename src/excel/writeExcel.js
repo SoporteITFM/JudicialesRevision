@@ -1,45 +1,105 @@
 /**
- * Escritura/actualización del Excel: columnas H (Estado Procesal) y J (Fecha Estado Procesal).
+ * Escritura/actualización del Excel sin romper el formato.
  */
+
 const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 const logger = require('../utils/logger');
-const { COL_ESTADO_PROCESAL, COL_FECHA_ESTADO, RUTA_EXCEL_SALIDA } = require('../config/constants');
 
-/**
- * Actualiza una fila del sheet: escribe Estado Procesal (H) y Fecha Estado (J).
- * Sobreescribe si ya tenían contenido.
- * @param {any[][]} data - Matriz de datos del sheet (modificada in-place)
- * @param {number} rowIndex - Índice de fila (0-based)
- * @param {string} estadoProcesal - Texto de la síntesis
- * @param {string} fechaEstado - Fecha en formato DD-MM-YYYY
- */
-function actualizarFilaEnData(data, rowIndex, estadoProcesal, fechaEstado) {
-  if (rowIndex < 0 || rowIndex >= data.length) return;
-  const fila = data[rowIndex];
-  if (!fila) return;
-  fila[COL_ESTADO_PROCESAL] = estadoProcesal;
-  fila[COL_FECHA_ESTADO] = fechaEstado;
+const {
+  COL_ESTADO_PROCESAL,
+  COL_FECHA_ESTADO,
+  RUTA_EXCEL_SALIDA
+} = require('../config/constants');
+
+
+function actualizarCelda(sheet, rowIndex, colIndex, valor) {
+
+  const direccion = XLSX.utils.encode_cell({
+    r: rowIndex,
+    c: colIndex
+  });
+
+  sheet[direccion] = {
+    t: 's',
+    v: valor
+  };
+
+  // actualizar rango del sheet si es necesario
+  const range = XLSX.utils.decode_range(sheet['!ref']);
+
+  if (rowIndex > range.e.r) range.e.r = rowIndex;
+  if (colIndex > range.e.c) range.e.c = colIndex;
+
+  sheet['!ref'] = XLSX.utils.encode_range(range);
 }
 
+
+
 /**
- * Guarda el workbook a la ruta de salida.
- * @param {import('xlsx').WorkBook} workbook
- * @param {string} sheetName
- * @param {any[][]} data
- * @param {string} [rutaSalida] - Si no se pasa, usa RUTA_EXCEL_SALIDA
+ * Actualiza Estado Procesal y Fecha Estado Procesal
  */
-function guardarExcel(workbook, sheetName, data, rutaSalida) {
-  const ruta = rutaSalida || RUTA_EXCEL_SALIDA;
+
+function actualizarFila(sheet, rowIndex, estadoProcesal, fechaEstado) {
+
+  if (!sheet) return;
+
+  if (estadoProcesal) {
+
+    actualizarCelda(
+      sheet,
+      rowIndex,
+      COL_ESTADO_PROCESAL,
+      estadoProcesal
+    );
+
+  }
+
+  if (fechaEstado) {
+
+    actualizarCelda(
+      sheet,
+      rowIndex,
+      COL_FECHA_ESTADO,
+      fechaEstado
+    );
+
+  }
+
+}
+
+
+
+/**
+ * Guarda el Excel
+ */
+
+function guardarExcel(workbook, rutaSalida) {
+
+  let ruta = rutaSalida || RUTA_EXCEL_SALIDA;
+
+  // asegurar extensión
+  if (!ruta.endsWith('.xlsx')) {
+    ruta = `${ruta}.xlsx`;
+  }
+
   const dir = path.dirname(ruta);
+
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  const sheet = XLSX.utils.aoa_to_sheet(data);
-  workbook.Sheets[sheetName] = sheet;
+
   XLSX.writeFile(workbook, ruta);
-  logger.info('Excel guardado en:', ruta);
+
+  logger.info(`Excel guardado correctamente en: ${ruta}`);
+
+  return ruta;
 }
 
-module.exports = { actualizarFilaEnData, guardarExcel };
+
+
+module.exports = {
+  actualizarFila,
+  guardarExcel
+};

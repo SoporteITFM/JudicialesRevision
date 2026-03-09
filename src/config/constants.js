@@ -19,6 +19,10 @@ const SELECTOR_ORGANO = '#ddlOrgano_chosen';
 const SELECTOR_TIPO_EXPEDIENTE = '#ddlTipoExpediente_chosen';
 const SELECTOR_INPUT_EXPEDIENTE = '#txtExpediente';
 const SELECTOR_BOTON_BUSCAR = 'button:has-text("Buscar"), input[value="Buscar"]';
+const SELECTOR_GRID_RESULTADOS = '#gridResultados';
+
+// Espera tras cada dropdown (AJAX del portal)
+const WAIT_AFTER_DROPDOWN_MS = 1200;
 
 // Columna del circuito en Excel (0-based). A=0, B=1, C=2. Ajustar si tu Excel usa otra columna.
 const COL_CIRCUITO = 2;
@@ -55,6 +59,8 @@ module.exports = {
   SELECTOR_TIPO_EXPEDIENTE,
   SELECTOR_INPUT_EXPEDIENTE,
   SELECTOR_BOTON_BUSCAR,
+  SELECTOR_GRID_RESULTADOS,
+  WAIT_AFTER_DROPDOWN_MS,
   COL_CIRCUITO,
   COL_ORGANO,
   COL_NUMERO_EXPEDIENTE,

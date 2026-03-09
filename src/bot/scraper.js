@@ -1,25 +1,55 @@
 /**
- * Orquestador del flujo por expediente: login (una vez por contexto), búsqueda, tabla, síntesis y actualización.
+ * Orquestador del flujo por expediente: login, búsqueda, detección de resultados y extracción.
+ * procesarExpediente(expediente, credenciales) abre navegador, ejecuta el flujo y devuelve { estadoProcesal, fechaEstado }.
  */
+const { chromium } = require('playwright');
 const logger = require('../utils/logger');
 const { loginPJF } = require('./login');
 const { llenarFiltrosYBuscar, clickBuscarYEsperarNuevaPestana } = require('./searchExpediente');
 const { existePublicacionHoy } = require('./extractTable');
 const { abrirYExtraerSintesis } = require('./extractSintesis');
 const { getFechaActualFormatoPortal } = require('../utils/dateUtils');
+const { SELECTOR_GRID_RESULTADOS } = require('../config/constants');
+
+const MENSAJE_SIN_REGISTROS = 'No se encontraron registros';
 
 /**
- * Procesa un solo expediente en una página ya logueada (en "Consulta de datos públicos").
- * @param {import('playwright').BrowserContext} context
- * @param {import('playwright').Page} page - Página ya en consulta (después de login)
- * @param {{ circuito: string, organo: string, tipoExpediente: string, numeroExpediente: string, rowIndex: number }} expediente
- * @param {(rowIndex: number, estadoProcesal: string, fechaEstado: string) => Promise<void>} actualizarFilaExcel
- * @returns {Promise<{ ok: boolean, error?: string }>}
+ * Comprueba si la página de resultados indica que no hay registros.
  */
-async function procesarExpediente(context, page, expediente, actualizarFilaExcel) {
+async function esPaginaSinResultados(page) {
+  const body = await page.locator('body').textContent().catch(() => '');
+  return String(body || '').includes(MENSAJE_SIN_REGISTROS);
+}
+
+/**
+ * Comprueba si en la página está visible el grid de resultados.
+ */
+async function tieneGridResultados(page) {
+  const el = page.locator(SELECTOR_GRID_RESULTADOS).first();
+  return (await el.count()) > 0 && (await el.isVisible().catch(() => false));
+}
+
+/**
+ * Procesa un expediente: login, búsqueda, detección de "sin resultados" o extracción de estado/fecha.
+ * Compatible con browserPool: recibe (expediente, credenciales) y devuelve { estadoProcesal, fechaEstado }.
+ *
+ * @param {{ circuito: string, organo: string, tipoExpediente: string, numeroExpediente: string, rowIndex: number }} expediente
+ * @param {{ user: string, password: string }} credenciales
+ * @returns {Promise<{ estadoProcesal: string, fechaEstado: string }>}
+ */
+async function procesarExpediente(expediente, credenciales) {
   const { circuito, organo, tipoExpediente, numeroExpediente, rowIndex } = expediente;
+  let browser;
+  let pageResultados = null;
 
   try {
+    browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    await loginPJF(page, credenciales);
+    await page.waitForLoadState('domcontentloaded');
+
     await llenarFiltrosYBuscar(page, {
       circuito,
       organo,
@@ -27,26 +57,51 @@ async function procesarExpediente(context, page, expediente, actualizarFilaExcel
       numeroExpediente
     });
 
-    const pageTabla = await clickBuscarYEsperarNuevaPestana(context, page);
-    await pageTabla.waitForLoadState('networkidle').catch(() => {});
+    pageResultados = await clickBuscarYEsperarNuevaPestana(context, page);
+    await pageResultados.waitForLoadState('networkidle').catch(() => {});
 
-    const { existe, indiceFila } = await existePublicacionHoy(pageTabla);
+    const sinResultados = await esPaginaSinResultados(pageResultados);
+    const conGrid = await tieneGridResultados(pageResultados);
 
-    if (!existe || indiceFila == null) {
-      await pageTabla.close().catch(() => {});
-      return { ok: true };
+    if (sinResultados || !conGrid) {
+      await pageResultados.close().catch(() => {});
+      await browser.close().catch(() => {});
+      return {
+        estadoProcesal: 'SIN RESULTADOS',
+        fechaEstado: ''
+      };
     }
 
-    const texto = await abrirYExtraerSintesis(context, pageTabla, indiceFila);
-    await pageTabla.close().catch(() => {});
+    const { existe, indiceFila } = await existePublicacionHoy(pageResultados);
+
+    if (!existe || indiceFila == null) {
+      await pageResultados.close().catch(() => {});
+      await browser.close().catch(() => {});
+      return { estadoProcesal: '', fechaEstado: '' };
+    }
+
+    const texto = await abrirYExtraerSintesis(context, pageResultados, indiceFila);
+    await pageResultados.close().catch(() => {});
+    await browser.close().catch(() => {});
 
     const fechaHoy = getFechaActualFormatoPortal();
-    await actualizarFilaExcel(rowIndex, texto, fechaHoy);
-    logger.info('Excel actualizado para fila', rowIndex + 1);
-    return { ok: true };
+    logger.info('Expediente procesado, fila', rowIndex + 1);
+    return {
+      estadoProcesal: texto || '',
+      fechaEstado: fechaHoy
+    };
   } catch (err) {
     logger.error(`Expediente ${numeroExpediente} (fila ${rowIndex + 1}):`, err.message);
-    return { ok: false, error: err.message };
+    if (pageResultados && !pageResultados.isClosed()) {
+      await pageResultados.close().catch(() => {});
+    }
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+    return {
+      estadoProcesal: `Error: ${err.message}`,
+      fechaEstado: ''
+    };
   }
 }
 
