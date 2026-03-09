@@ -74,6 +74,42 @@ async function main() {
     await page.waitForSelector('#AjaxContainer', { state: 'visible' });
     console.log("Entramos a Consulta de datos públicos");
 
+    // Selección de circuito (una sola vez)
+    await page.waitForSelector('#ddlCircuito_chosen');
+    await page.locator('#ddlCircuito_chosen').click();
+    await page.locator('#ddlCircuito_chosen')
+      .getByText('SÉPTIMO CIRCUITO', { exact: true })
+      .click();
+    console.log("Circuito seleccionado");
+
+    // Abrir selector de órgano jurisdiccional
+    await page.locator('#ddlOrgano_chosen').click();
+
+   // Seleccionar el juzgado dentro del dropdown
+   await page.locator('#ddlOrgano_chosen .chosen-results li')
+   .filter({ hasText: 'Juzgado Octavo de Distrito' })
+   .click();
+   console.log("Juzgado seleccionado");
+   
+   //Seleccionar el amparo
+   await page.locator('a').filter({ hasText: 'Amparo Indirecto' }).click();
+   await page.getByRole('listitem').filter({ hasText: /^Amparo Indirecto$/ }).click();
+   console.log("Amparo seleccionado");
+
+    // Llenar número de expediente
+    await page.getByRole('textbox', { name: 'Ejemplo: 1/' }).click();
+    await page.getByRole('textbox', { name: 'Ejemplo: 1/' }).fill('408/2025');
+    console.log("Expediente Lleno");                         
+
+    // Botón Buscar abre una nueva pestaña: esperar el evento y cargar la página
+    const page1Promise = page.waitForEvent('popup');
+    await page.getByRole('button', { name: ' Buscar' }).click();
+    const page1 = await page1Promise;
+    console.log("Pagina abierta");
+
+    await page1.locator('#grvAcuerdos_ctl85_lnkTicketLink2').click();
+    console.log("Leyendo sintesis");
+
     // 12. Esperar navegación después del login
     await page.waitForLoadState('networkidle');
 

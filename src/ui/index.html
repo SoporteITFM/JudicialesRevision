@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PJF Bot - Consulta Expedientes</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>BOT CONSULTA EXPEDIENTES PJF</h1>
+
+    <section class="actions">
+      <div class="file-section">
+        <button type="button" id="btnCargar">Cargar Excel</button>
+        <span id="nombreArchivo" class="filename">—</span>
+      </div>
+
+      <button type="button" id="btnEjecutar" disabled>Ejecutar revisión</button>
+    </section>
+
+    <section class="progress-section">
+      <p class="label">Progreso:</p>
+      <p id="textoProgreso" class="progress-text">Procesando expediente 0 de 0</p>
+    </section>
+
+    <section class="log-section">
+      <p class="label">LOG</p>
+      <div id="logContainer" class="log-container"></div>
+    </section>
+
+    <section class="download-section">
+      <button type="button" id="btnDescargar" disabled>Descargar Excel actualizado</button>
+    </section>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

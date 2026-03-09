@@ -1,0 +1,118 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+h1 {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: #e94560;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.file-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  background: #e94560;
+  color: #fff;
+}
+
+button:hover:not(:disabled) {
+  background: #ff6b6b;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filename {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.progress-section {
+  margin-bottom: 1rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.progress-text {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.log-section {
+  margin-bottom: 1.5rem;
+}
+
+.log-container {
+  background: #0f0f1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 12px;
+  height: 220px;
+  overflow-y: auto;
+  font-family: 'Consolas', monospace;
+  font-size: 0.8rem;
+}
+
+.log-line {
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.log-info {
+  color: #7fdbff;
+}
+
+.log-error {
+  color: #ff6b6b;
+}
+
+.log-warn {
+  color: #ffdc00;
+}
+
+.download-section button {
+  background: #16213e;
+  border: 1px solid #e94560;
+}
+
+.download-section button:hover:not(:disabled) {
+  background: #1f3460;
+}
