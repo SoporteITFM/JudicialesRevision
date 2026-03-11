@@ -72,9 +72,9 @@ async function procesarExpediente(expediente, credenciales) {
       };
     }
 
-    const { existe, indiceFila, textoResumen } = await existePublicacionHoy(pageResultados);
+    const { existe, textoEstadoProcesal } = await existePublicacionHoy(pageResultados);
 
-    if (!existe || indiceFila == null) {
+    if (!existe) {
       logger.info(`Expediente ${numeroExpediente}: no hay publicación con fecha del día actual → no actualizar`);
       await pageResultados.close().catch(() => {});
       await browser.close().catch(() => {});
@@ -87,7 +87,7 @@ async function procesarExpediente(expediente, credenciales) {
     const fechaHoy = getFechaActualFormatoPortal();
     logger.info(`Expediente ${numeroExpediente} (fila ${rowIndex + 1}): estado encontrado con fecha del día → se actualizará Excel`);
     return {
-      estadoProcesal: textoResumen || '',
+      estadoProcesal: textoEstadoProcesal || '',
       fechaEstado: fechaHoy
     };
   } catch (err) {
