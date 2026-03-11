@@ -29,16 +29,21 @@
   },
   "build": {
     "appId": "com.pjf.bot",
-    "productName": "PJF Bot Expedientes",
+    "productName": "ETHOS - PJF Bot Expedientes",
+    "icon": "assets/icon.ico",
     "directories": {
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": true
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
     }
   }
 }

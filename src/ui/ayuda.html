@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ayuda - PJF Bot Expedientes</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #1a1a2e;
+      color: #eee;
+      line-height: 1.5;
+    }
+    h1 { color: #e94560; font-size: 1.4rem; margin-top: 0; }
+    h2 { color: #7fdbff; font-size: 1.1rem; margin-top: 1.2rem; }
+    p, li { color: #ccc; }
+    ul { padding-left: 1.2rem; }
+    .section { margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Ayuda — PJF Bot Expedientes</h1>
+
+  <div class="section">
+    <h2>¿Qué hace esta aplicación?</h2>
+    <p>Esta aplicación automatiza la consulta de expedientes en el portal del Poder Judicial de la Federación (PJF), lee los datos desde un archivo Excel y actualiza el mismo Excel con el estado procesal y la fecha cuando existe una publicación del día en el portal.</p>
+  </div>
+
+  <div class="section">
+    <h2>Pasos de uso</h2>
+    <ul>
+      <li><strong>Cargar Excel:</strong> Selecciona un archivo Excel (.xlsx) que contenga los expedientes a revisar. El sistema espera que la información esté organizada por circuito, órgano jurisdiccional, número de expediente y tipo de expediente a partir de la fila 4.</li>
+      <li><strong>Ejecutar revisión:</strong> Al pulsar este botón, la aplicación inicia sesión en el portal del PJF, recorre cada expediente del Excel, busca si hay una publicación con la fecha del día y, si la encuentra, extrae el resumen y actualiza las columnas de Estado Procesal y Fecha Estado Procesal.</li>
+      <li><strong>Descargar Excel actualizado:</strong> Al finalizar la revisión, el Excel actualizado se guarda en la carpeta <code>output</code> con un nombre que incluye la fecha. Desde aquí puedes abrir la carpeta donde se guardó el archivo.</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Requisitos</h2>
+    <ul>
+      <li>Archivo <code>.env</code> en la raíz del proyecto con <code>PJF_USER</code> y <code>PJF_PASSWORD</code> para el acceso al portal del PJF.</li>
+      <li>Excel con columnas: A (Órgano), B (Número de expediente), E (Tipo de expediente). Las columnas H y J se actualizan con Estado Procesal y Fecha Estado Procesal.</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Nota</h2>
+    <p>El proceso puede tardar según la cantidad de expedientes. No cierres la aplicación mientras la revisión esté en curso. Los mensajes del LOG indican el avance y cualquier error que se registre.</p>
+  </div>
+</body>
+</html>

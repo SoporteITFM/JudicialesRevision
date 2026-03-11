@@ -1,7 +1,7 @@
 /**
  * Proceso principal de Electron. Gestiona ventana, IPC y ejecución del bot.
  */
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
@@ -15,8 +15,40 @@ const { getFechaParaArchivo } = require('./src/utils/dateUtils');
 let mainWindow = null;
 let excelResultado = null; // { workbook, sheetName, data } al terminar
 
+function crearMenuAplicacion() {
+  const plantilla = [
+    {
+      label: 'Archivo',
+      submenu: [
+        { role: 'quit', label: 'Salir' }
+      ]
+    },
+    {
+      label: 'Ayuda',
+      submenu: [
+        {
+          label: 'Cómo usar',
+          click: () => {
+            const ventanaAyuda = new BrowserWindow({
+              width: 520,
+              height: 520,
+              parent: mainWindow,
+              modal: false,
+              webPreferences: { contextIsolation: true, nodeIntegration: false }
+            });
+            ventanaAyuda.loadFile(path.join(__dirname, 'src', 'ui', 'ayuda.html'));
+            ventanaAyuda.setMenu(null);
+          }
+        }
+      ]
+    }
+  ];
+  const menu = Menu.buildFromTemplate(plantilla);
+  Menu.setApplicationMenu(menu);
+}
+
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const opcionesVentana = {
     width: 800,
     height: 700,
     webPreferences: {
@@ -24,8 +56,14 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false
     }
-  });
+  };
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  if (fs.existsSync(iconPath)) {
+    opcionesVentana.icon = iconPath;
+  }
+  mainWindow = new BrowserWindow(opcionesVentana);
   mainWindow.loadFile(path.join(__dirname, 'src', 'ui', 'index.html'));
+  crearMenuAplicacion();
 }
 
 app.whenReady().then(createWindow);
@@ -89,7 +127,7 @@ ipcMain.handle('ejecutar-revision', async () => {
 
   const fechaArchivo = getFechaParaArchivo();
   const nombreArchivo = `Actualizacion_Boletin_${fechaArchivo}.xlsx`;
-  const rutaSalida = path.join(__dirname, 'output', nombreArchivo);
+  const rutaSalida = path.join(app.getPath('downloads'), nombreArchivo);
 
   try {
     await runPool({
@@ -113,11 +151,11 @@ ipcMain.handle('ejecutar-revision', async () => {
   }
 });
 
-// Ruta del Excel generado para descarga (nombre dinámico por fecha)
+// Ruta del Excel generado para descarga (carpeta Descargas del usuario)
 ipcMain.handle('obtener-ruta-descarga', () => {
   const { getFechaParaArchivo } = require('./src/utils/dateUtils');
   const nombre = `Actualizacion_Boletin_${getFechaParaArchivo()}.xlsx`;
-  const ruta = path.join(__dirname, 'output', nombre);
+  const ruta = path.join(app.getPath('downloads'), nombre);
   return fs.existsSync(ruta) ? ruta : null;
 });
 
