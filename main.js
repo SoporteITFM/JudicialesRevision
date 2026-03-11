@@ -7,11 +7,10 @@ const fs = require('fs');
 require('dotenv').config();
 
 const { leerExcelCompleto, buildExpedientesFromData } = require('./src/excel/readExcel');
-const { actualizarFilaEnData, guardarExcel } = require('./src/excel/writeExcel');
+const { actualizarFila, guardarExcel } = require('./src/excel/writeExcel');
 const { runPool } = require('./src/utils/browserPool');
 const logger = require('./src/utils/logger');
-
-const RUTA_SALIDA = path.join(__dirname, 'output', 'resultados.xlsx');
+const { getFechaParaArchivo } = require('./src/utils/dateUtils');
 
 let mainWindow = null;
 let excelResultado = null; // { workbook, sheetName, data } al terminar
@@ -51,7 +50,7 @@ ipcMain.handle('cargar-excel', async (event, rutaArchivo) => {
     return { ok: false, error: 'Archivo no encontrado' };
   }
   try {
-    const { workbook, sheetName, data } = leerExcelCompleto(rutaArchivo);
+    const { workbook, sheetName, data } = await leerExcelCompleto(rutaArchivo);
     const expedientes = buildExpedientesFromData(data);
     excelResultado = { workbook, sheetName, data, rutaOriginal: rutaArchivo };
     return { ok: true, total: expedientes.length, nombre: path.basename(rutaArchivo) };
@@ -72,6 +71,10 @@ ipcMain.handle('ejecutar-revision', async () => {
   }
 
   const { workbook, sheetName, data } = excelResultado;
+  const worksheet = workbook.getWorksheet(sheetName);
+  if (!worksheet) {
+    return { ok: false, error: 'No se encontró la hoja en el Excel' };
+  }
   const expedientes = buildExpedientesFromData(data);
 
   if (expedientes.length === 0) {
@@ -84,12 +87,16 @@ ipcMain.handle('ejecutar-revision', async () => {
     }
   });
 
+  const fechaArchivo = getFechaParaArchivo();
+  const nombreArchivo = `Actualizacion_Boletin_${fechaArchivo}.xlsx`;
+  const rutaSalida = path.join(__dirname, 'output', nombreArchivo);
+
   try {
     await runPool({
       expedientes,
       credenciales: { user, password },
       onFilaActualizada: (rowIndex, estadoProcesal, fechaEstado) => {
-        actualizarFilaEnData(data, rowIndex, estadoProcesal, fechaEstado);
+        actualizarFila(worksheet, rowIndex, estadoProcesal, fechaEstado);
       },
       onProgreso: (current, total) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -98,18 +105,20 @@ ipcMain.handle('ejecutar-revision', async () => {
       }
     });
 
-    guardarExcel(workbook, sheetName, data, RUTA_SALIDA);
-    excelResultado = { ...excelResultado, data };
-    return { ok: true, rutaSalida: RUTA_SALIDA };
+    await guardarExcel(workbook, rutaSalida);
+    return { ok: true, rutaSalida };
   } catch (err) {
     logger.error('Error en ejecución:', err.message);
     return { ok: false, error: err.message };
   }
 });
 
-// Ruta del Excel generado para descarga
+// Ruta del Excel generado para descarga (nombre dinámico por fecha)
 ipcMain.handle('obtener-ruta-descarga', () => {
-  return fs.existsSync(RUTA_SALIDA) ? RUTA_SALIDA : null;
+  const { getFechaParaArchivo } = require('./src/utils/dateUtils');
+  const nombre = `Actualizacion_Boletin_${getFechaParaArchivo()}.xlsx`;
+  const ruta = path.join(__dirname, 'output', nombre);
+  return fs.existsSync(ruta) ? ruta : null;
 });
 
 ipcMain.handle('mostrar-en-carpeta', (event, ruta) => {

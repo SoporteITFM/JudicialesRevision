@@ -1,10 +1,10 @@
 /**
  * Lectura del archivo Excel con expedientes.
+ * Usa ExcelJS para preservar formato (colores, estilos) al guardar después.
  * El primer circuito comienza en la fila 4. Las filas 1, 2 y 3 se ignoran.
- * Columnas: A=órgano, B=número expediente, E=tipo expediente.
  */
 
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const logger = require('../utils/logger');
 const { normalizarOrgano, normalizarTipoExpediente } = require('../utils/textCleaner');
 
@@ -48,7 +48,7 @@ function extraerTextoCircuito(texto) {
   const limpio = limpiarTextoExcel(texto);
 
   const match = limpio.match(
-    /(PRIMER|SEGUNDO|TERCER|CUARTO|QUINTO|SEXTO|SÉPTIMO|SEPTIMO|OCTAVO|NOVENO|DÉCIMO|DECIMO|DÉCIMO\s+PRIMERO|DECIMO\s+PRIMERO|DÉCIMO\s+SEGUNDO|DECIMO\s+SEGUNDO).*CIRCUITO/i
+    /(PRIMER|SEGUNDO|TERCER|CUARTO|QUINTO|SEXTO|SÉPTIMO|SEPTIMO|OCTAVO|NOVENO|DÉCIMO|DECIMO|DÉCIMO\s+PRIMERO|DECIMO\s+PRIMERO|DÉCIMO\s+SEGUNDO|DECIMO\s+SEGUNDO)\s+CIRCUITO/i
   );
 
   if (!match) return '';
@@ -94,26 +94,28 @@ function filaTieneExpediente(fila) {
 
 
 /**
- * Obtiene el workbook completo para poder actualizarlo después.
+ * Obtiene el workbook completo (ExcelJS) para poder actualizarlo después preservando formato.
+ * @returns {Promise<{ workbook: import('exceljs').Workbook, sheetName: string, data: any[][] }>}
  */
-
-function leerExcelCompleto(rutaArchivo) {
-
+async function leerExcelCompleto(rutaArchivo) {
   logger.info(`Leyendo archivo Excel: ${rutaArchivo}`);
 
-  const workbook = XLSX.readFile(rutaArchivo);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(rutaArchivo);
 
-  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) {
+    throw new Error('El archivo Excel no contiene hojas');
+  }
+  const sheetName = worksheet.name;
 
-  const sheet = workbook.Sheets[sheetName];
-
-  const data = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    blankrows: false
+  const data = [];
+  worksheet.eachRow((row, rowNumber) => {
+    const values = row.values;
+    data.push(values && Array.isArray(values) ? values.slice(1) : []);
   });
 
   logger.info(`Filas detectadas en Excel: ${data.length}`);
-
   return { workbook, sheetName, data };
 }
 
@@ -142,9 +144,8 @@ function buildExpedientesFromData(data) {
 
     if (filaContieneCircuito(fila)) {
 
-      const textoCircuito = fila
-        .map((c) => (c != null ? String(c) : ''))
-        .join(' ');
+      const primeraCelda = fila[0] != null && String(fila[0]).trim() !== '' ? String(fila[0]).trim() : '';
+      const textoCircuito = primeraCelda || fila.map((c) => (c != null ? String(c) : '')).join(' ').trim();
 
       const circuitoDetectado = extraerTextoCircuito(textoCircuito);
 
@@ -237,12 +238,8 @@ function buildExpedientesFromData(data) {
  */
 
 async function leerExpedientesDesdeExcel(rutaArchivo) {
-
-  const { data } = leerExcelCompleto(rutaArchivo);
-
-  const expedientes = buildExpedientesFromData(data);
-
-  return expedientes;
+  const { data } = await leerExcelCompleto(rutaArchivo);
+  return buildExpedientesFromData(data);
 }
 
 

@@ -90,16 +90,34 @@ async function main() {
    .filter({ hasText: 'Juzgado Octavo de Distrito' })
    .click();
    console.log("Juzgado seleccionado");
-   
-   //Seleccionar el amparo
-   await page.locator('a').filter({ hasText: 'Amparo Indirecto' }).click();
-   await page.getByRole('listitem').filter({ hasText: /^Amparo Indirecto$/ }).click();
-   console.log("Amparo seleccionado");
 
-    // Llenar número de expediente
-    await page.getByRole('textbox', { name: 'Ejemplo: 1/' }).click();
-    await page.getByRole('textbox', { name: 'Ejemplo: 1/' }).fill('408/2025');
-    console.log("Expediente Lleno");                         
+ 
+
+   // esperar tipo expediente
+await page.waitForSelector('#ddlTipoExpediente_chosen', { state: 'visible' });
+
+// abrir dropdown
+await page.locator('#ddlTipoExpediente_chosen').click();
+
+// esperar opciones
+await page.waitForSelector('#ddlTipoExpediente_chosen .chosen-results li');
+
+// seleccionar tipo expediente
+await page.locator('#ddlTipoExpediente_chosen .chosen-results li')
+  .filter({ hasText: 'Amparo Indirecto' })
+  .first()
+  .click();
+
+console.log("Tipo de expediente seleccionado");
+
+// llenar número de expediente
+await page.waitForSelector('#txtNumeroExpediente');
+
+await page.fill('#txtNumeroExpediente', '408/2025');
+
+console.log("Expediente lleno");
+
+                          
 
     // Botón Buscar abre una nueva pestaña: esperar el evento y cargar la página
     const page1Promise = page.waitForEvent('popup');

@@ -1,6 +1,7 @@
 /**
  * Llenado del formulario de búsqueda de expediente (circuito, órgano, tipo, número)
- * y click en Buscar. Usa el input interno de Chosen y esperas para estabilidad con AJAX.
+ * y click en Buscar. Usa el patrón del portal PJF: Chosen + getByText para circuito/órgano;
+ * para tipo de expediente usa listitem o enlace (a) con filter(hasText) para evitar timeouts.
  */
 
 const logger = require('../utils/logger');
@@ -21,63 +22,55 @@ function delay(ms) {
 }
 
 /**
- * Selecciona una opción en un dropdown Chosen usando el input interno.
- * Flujo: abrir chosen → escribir en input → esperar resultados → clic en opción → espera post-selección.
+ * Selecciona el circuito: click en el Chosen y luego en la opción por texto exacto.
  */
-async function seleccionarOpcionChosenConInput(page, selectorChosen, textoBuscado) {
-  const texto = String(textoBuscado || '').trim().toUpperCase();
-  if (!texto) {
-    throw new Error(`Texto vacío para selector ${selectorChosen}`);
+async function seleccionarCircuito(page, circuito) {
+  if (!circuito) throw new Error('Circuito vacío');
+  await page.waitForSelector('#ddlCircuito_chosen', { state: 'visible', timeout: TIMEOUT_SELECTOR });
+  await page.locator('#ddlCircuito_chosen').click();
+  await delay(WAIT_AFTER_DROPDOWN_MS);
+  await page.locator('#ddlCircuito_chosen').getByText(circuito, { exact: true }).click();
+  logger.info('Circuito seleccionado:', circuito);
+  await delay(WAIT_AFTER_DROPDOWN_MS);
+}
+
+/**
+ * Selecciona el órgano: click en el Chosen y luego en la opción por texto (coincidencia parcial).
+ */
+async function seleccionarOrgano(page, organo) {
+  if (!organo) throw new Error('Órgano vacío');
+  await page.waitForSelector('#ddlOrgano_chosen', { state: 'visible', timeout: TIMEOUT_SELECTOR });
+  await page.locator('#ddlOrgano_chosen').click();
+  await delay(WAIT_AFTER_DROPDOWN_MS);
+  await page.locator('#ddlOrgano_chosen').getByText(organo, { exact: false }).click();
+  logger.info('Órgano seleccionado:', organo);
+  await delay(WAIT_AFTER_DROPDOWN_MS);
+}
+
+/**
+ * Selecciona el tipo de expediente usando listitem o enlace (a) con el texto.
+ * Opcionalmente abre el chosen de tipo si está visible (timeout corto); luego clic en la opción.
+ */
+async function seleccionarTipoExpediente(page, tipoExpediente) {
+  if (!tipoExpediente) throw new Error('Tipo de expediente vacío');
+  await delay(WAIT_AFTER_DROPDOWN_MS);
+  try {
+    await page.locator('#ddlTipoExpediente_chosen').click({ timeout: 5000 });
+    await delay(500);
+  } catch {
+    // Chosen de tipo puede no estar visible; las opciones pueden mostrarse de otra forma
   }
-
-  const selectorInput = `${selectorChosen} input`;
-
-  await page.waitForSelector(selectorChosen, {
-    state: 'visible',
-    timeout: TIMEOUT_SELECTOR
-  });
-
-  await page.locator(selectorChosen).click();
-
-  await page.waitForSelector(selectorInput, {
-    state: 'visible',
-    timeout: TIMEOUT_SELECTOR
-  });
-
-  await page.locator(selectorInput).fill(texto);
-
-  const opcionesSelector = `${selectorChosen} .chosen-results li`;
-  await page.waitForSelector(opcionesSelector, {
-    state: 'visible',
-    timeout: TIMEOUT_SELECTOR
-  });
-
-  const opciones = page.locator(opcionesSelector);
-  const count = await opciones.count();
-  if (count === 0) {
-    throw new Error(`No hay opciones disponibles en ${selectorChosen}`);
+  const listitem = page.getByRole('listitem').filter({ hasText: tipoExpediente }).first();
+  const enlace = page.locator('a').filter({ hasText: tipoExpediente }).first();
+  try {
+    await listitem.waitFor({ state: 'visible', timeout: TIMEOUT_SELECTOR });
+    await listitem.click();
+    logger.info('Tipo de expediente seleccionado (listitem):', tipoExpediente);
+  } catch {
+    await enlace.waitFor({ state: 'visible', timeout: TIMEOUT_SELECTOR });
+    await enlace.click();
+    logger.info('Tipo de expediente seleccionado (enlace):', tipoExpediente);
   }
-
-  let encontrada = false;
-  for (let i = 0; i < count; i++) {
-    const textoOpcion = await opciones.nth(i).innerText();
-    if (textoOpcion.toUpperCase().includes(texto)) {
-      await opciones.nth(i).click();
-      logger.info(`Opción seleccionada: ${textoOpcion}`);
-      encontrada = true;
-      break;
-    }
-  }
-
-  if (!encontrada) {
-    const listaOpciones = [];
-    for (let i = 0; i < count; i++) {
-      listaOpciones.push(await opciones.nth(i).innerText());
-    }
-    logger.error(`No se encontró coincidencia para "${texto}" en ${selectorChosen}. Opciones:`, listaOpciones);
-    throw new Error(`No se encontró la opción "${texto}"`);
-  }
-
   await delay(WAIT_AFTER_DROPDOWN_MS);
 }
 
@@ -91,6 +84,7 @@ async function llenarFiltrosYBuscar(page, filtros) {
   }
 
   await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle').catch(() => {});
 
   const circuito = filtros.circuito
     ? String(filtros.circuito).trim().toUpperCase()
@@ -101,25 +95,14 @@ async function llenarFiltrosYBuscar(page, filtros) {
     ? String(filtros.numeroExpediente).trim()
     : '';
 
-  console.log('Circuito:', circuito);
-  console.log('Órgano:', organo);
-  console.log('Tipo:', tipoExpediente);
-  console.log('Expediente:', numero);
-
   logger.info('======= FILTROS ======');
   logger.info(`Circuito: ${circuito} | Órgano: ${organo} | Tipo: ${tipoExpediente} | Número: ${numero}`);
   logger.info('=====================');
 
-  // 1. Circuito
-  await seleccionarOpcionChosenConInput(page, '#ddlCircuito_chosen', circuito);
+  await seleccionarCircuito(page, circuito);
+  await seleccionarOrgano(page, organo);
+  await seleccionarTipoExpediente(page, tipoExpediente);
 
-  // 2. Órgano
-  await seleccionarOpcionChosenConInput(page, '#ddlOrgano_chosen', organo);
-
-  // 3. Tipo expediente
-  await seleccionarOpcionChosenConInput(page, '#ddlTipoExpediente_chosen', tipoExpediente);
-
-  // 4. Número de expediente
   await page.waitForSelector(SELECTOR_INPUT_EXPEDIENTE, {
     state: 'visible',
     timeout: TIMEOUT_SELECTOR
@@ -129,13 +112,22 @@ async function llenarFiltrosYBuscar(page, filtros) {
 }
 
 /**
- * Clic en Buscar y espera la nueva pestaña. Espera a que cargue y a #gridResultados (si hay resultados).
+ * Clic en Buscar y espera la nueva pestaña.
+ * Antes de hacer click se cierra cualquier dropdown Chosen abierto (Escape + click en input)
+ * para evitar que un <li> del modal intercepte el click.
  */
 async function clickBuscarYEsperarNuevaPestana(context, page) {
-  logger.info('Presionando botón Buscar...');
+  logger.info('Cerrando dropdown y presionando botón Buscar...');
+
+  await page.keyboard.press('Escape');
+  await delay(150);
+  await page.keyboard.press('Escape');
+  await delay(150);
+  await page.locator(SELECTOR_INPUT_EXPEDIENTE).click({ force: true }).catch(() => {});
+  await delay(300);
 
   const nuevaPaginaPromise = context.waitForEvent('page', { timeout: 20000 });
-  await page.getByRole('button', { name: /Buscar/i }).click();
+  await page.locator('#btnBuscaExpediente').evaluate((el) => el.click());
 
   const pageResultados = await nuevaPaginaPromise;
   await pageResultados.waitForLoadState('domcontentloaded');

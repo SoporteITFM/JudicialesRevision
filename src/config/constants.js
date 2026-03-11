@@ -19,7 +19,7 @@ const SELECTOR_ORGANO = '#ddlOrgano_chosen';
 const SELECTOR_TIPO_EXPEDIENTE = '#ddlTipoExpediente_chosen';
 const SELECTOR_INPUT_EXPEDIENTE = '#txtExpediente';
 const SELECTOR_BOTON_BUSCAR = 'button:has-text("Buscar"), input[value="Buscar"]';
-const SELECTOR_GRID_RESULTADOS = '#gridResultados';
+const SELECTOR_GRID_RESULTADOS = '#grvAcuerdos';
 
 // Espera tras cada dropdown (AJAX del portal)
 const WAIT_AFTER_DROPDOWN_MS = 1200;

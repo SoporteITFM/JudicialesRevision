@@ -7,7 +7,6 @@ const logger = require('../utils/logger');
 const { loginPJF } = require('./login');
 const { llenarFiltrosYBuscar, clickBuscarYEsperarNuevaPestana } = require('./searchExpediente');
 const { existePublicacionHoy } = require('./extractTable');
-const { abrirYExtraerSintesis } = require('./extractSintesis');
 const { getFechaActualFormatoPortal } = require('../utils/dateUtils');
 const { SELECTOR_GRID_RESULTADOS } = require('../config/constants');
 
@@ -64,6 +63,7 @@ async function procesarExpediente(expediente, credenciales) {
     const conGrid = await tieneGridResultados(pageResultados);
 
     if (sinResultados || !conGrid) {
+      logger.info(`Expediente ${numeroExpediente}: sin resultados en el portal`);
       await pageResultados.close().catch(() => {});
       await browser.close().catch(() => {});
       return {
@@ -72,22 +72,22 @@ async function procesarExpediente(expediente, credenciales) {
       };
     }
 
-    const { existe, indiceFila } = await existePublicacionHoy(pageResultados);
+    const { existe, indiceFila, textoResumen } = await existePublicacionHoy(pageResultados);
 
     if (!existe || indiceFila == null) {
+      logger.info(`Expediente ${numeroExpediente}: no hay publicación con fecha del día actual → no actualizar`);
       await pageResultados.close().catch(() => {});
       await browser.close().catch(() => {});
       return { estadoProcesal: '', fechaEstado: '' };
     }
 
-    const texto = await abrirYExtraerSintesis(context, pageResultados, indiceFila);
     await pageResultados.close().catch(() => {});
     await browser.close().catch(() => {});
 
     const fechaHoy = getFechaActualFormatoPortal();
-    logger.info('Expediente procesado, fila', rowIndex + 1);
+    logger.info(`Expediente ${numeroExpediente} (fila ${rowIndex + 1}): estado encontrado con fecha del día → se actualizará Excel`);
     return {
-      estadoProcesal: texto || '',
+      estadoProcesal: textoResumen || '',
       fechaEstado: fechaHoy
     };
   } catch (err) {
