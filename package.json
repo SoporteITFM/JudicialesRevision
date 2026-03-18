@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
+    "build": "node scripts/install-playwright-browsers.js && electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -34,6 +34,9 @@
     "directories": {
       "output": "dist"
     },
+    "extraResources": [
+      { "from": "playwright-browsers", "to": "playwright-browsers", "filter": ["**/*"] }
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",

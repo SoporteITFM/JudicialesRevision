@@ -4,6 +4,7 @@
  */
 const { chromium } = require('playwright');
 const logger = require('../utils/logger');
+const { getBundledChromiumPath } = require('../utils/playwrightBundled');
 const { loginPJF } = require('./login');
 const { llenarFiltrosYBuscar, clickBuscarYEsperarNuevaPestana } = require('./searchExpediente');
 const { existePublicacionHoy } = require('./extractTable');
@@ -42,7 +43,10 @@ async function procesarExpediente(expediente, credenciales) {
   let pageResultados = null;
 
   try {
-    browser = await chromium.launch({ headless: true });
+    const launchOptions = { headless: true };
+    const bundledPath = getBundledChromiumPath();
+    if (bundledPath) launchOptions.executablePath = bundledPath;
+    browser = await chromium.launch(launchOptions);
     const context = await browser.newContext();
     const page = await context.newPage();
 
