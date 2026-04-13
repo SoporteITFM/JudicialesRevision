@@ -36,24 +36,43 @@ function limpiarTextoExcel(valor) {
 
 
 
+/** Patrón estricto para nombres de circuito del portal (ordinales habituales) */
+const REGEX_CIRCUITO_ESTRICTO =
+  /(PRIMER|SEGUNDO|TERCER|CUARTO|QUINTO|SEXTO|SÉPTIMO|SEPTIMO|OCTAVO|NOVENO|DÉCIMO|DECIMO|DÉCIMO\s+PRIMERO|DECIMO\s+PRIMERO|DÉCIMO\s+SEGUNDO|DECIMO\s+SEGUNDO|DÉCIMO\s+TERCERO|DECIMO\s+TERCERO|DÉCIMO\s+CUARTO|DECIMO\s+CUARTO|VIG[EÉ]SIMO|TRIG[EÉ]SIMO)\s+CIRCUITO/i;
+
 /**
- * Extrae el texto del circuito
- * Ejemplo:
- * "CIUDAD DE MÉXICO PRIMER CIRCUITO"
- * → "PRIMER CIRCUITO"
+ * Valor en columna B con formato de número de expediente (evita cabeceras combinadas que repiten texto en B).
+ * Ejemplos: 146/2025, 4/2025,  128/2024
  */
+function columnaBEsNumeroExpediente(valor) {
+  const t = limpiarTextoExcel(valor);
+  if (!t) return false;
+  return /^\d{1,6}\s*\/\s*\d{2,4}$/.test(t);
+}
 
+/**
+ * Extrae el texto del circuito para el portal.
+ * Prueba regex estricto; si falla, toma el tramo final tras " - " o el fragmento ...CIRCUITO (boletines con vigésimo, trigésimo, etc.).
+ */
 function extraerTextoCircuito(texto) {
-
   const limpio = limpiarTextoExcel(texto);
+  if (!limpio) return '';
 
-  const match = limpio.match(
-    /(PRIMER|SEGUNDO|TERCER|CUARTO|QUINTO|SEXTO|SÉPTIMO|SEPTIMO|OCTAVO|NOVENO|DÉCIMO|DECIMO|DÉCIMO\s+PRIMERO|DECIMO\s+PRIMERO|DÉCIMO\s+SEGUNDO|DECIMO\s+SEGUNDO)\s+CIRCUITO/i
-  );
+  let match = limpio.match(REGEX_CIRCUITO_ESTRICTO);
+  if (match) return match[0].toUpperCase();
 
-  if (!match) return '';
+  const segmentos = limpio.split(/\s*-\s*/);
+  for (let s = segmentos.length - 1; s >= 0; s--) {
+    const seg = limpiarTextoExcel(segmentos[s]);
+    if (!seg.includes('CIRCUITO')) continue;
+    match = seg.match(REGEX_CIRCUITO_ESTRICTO);
+    if (match) return match[0].toUpperCase();
+    const suelto = seg.match(/([\wÁÉÍÓÚÑ0-9][\wÁÉÍÓÚÑ0-9\s]{0,100}CIRCUITO)/i);
+    if (suelto) return limpiarTextoExcel(suelto[1]).toUpperCase();
+  }
 
-  return match[0].toUpperCase();
+  match = limpio.match(/([\wÁÉÍÓÚÑ0-9][\wÁÉÍÓÚÑ0-9\s\-]{2,120}CIRCUITO)/i);
+  return match ? limpiarTextoExcel(match[1]).toUpperCase() : '';
 }
 
 
@@ -77,25 +96,39 @@ function filaContieneCircuito(fila) {
 
 
 /**
- * Detecta si la fila tiene expediente
+ * Detecta si la fila tiene número de expediente válido en columna B (formato número/año).
  */
 
 function filaTieneExpediente(fila) {
-
   if (!fila) return false;
-
-  const numero = fila[COL_NUMERO_EXPEDIENTE];
-
-  if (numero == null) return false;
-
-  return limpiarTextoExcel(numero) !== '';
+  return columnaBEsNumeroExpediente(fila[COL_NUMERO_EXPEDIENTE]);
 }
 
 
 
 /**
+ * Texto de cabecera de circuito: prioriza columna A de la hoja (celda maestra si hay combinación).
+ */
+function textoParaCircuito(worksheet, excelRowNumber, fila) {
+  if (worksheet) {
+    try {
+      const row = worksheet.getRow(excelRowNumber);
+      const a = row.getCell(1);
+      const raw = a.text != null && a.text !== '' ? a.text : a.value;
+      if (raw != null && String(raw).trim() !== '') {
+        return limpiarTextoExcel(raw);
+      }
+    } catch (_) {
+      /* continúa con fila del array */
+    }
+  }
+  const primeraCelda = fila[0] != null && String(fila[0]).trim() !== '' ? String(fila[0]).trim() : '';
+  return primeraCelda || fila.map((c) => (c != null ? String(c) : '')).join(' ').trim();
+}
+
+/**
  * Obtiene el workbook completo (ExcelJS) para poder actualizarlo después preservando formato.
- * @returns {Promise<{ workbook: import('exceljs').Workbook, sheetName: string, data: any[][] }>}
+ * @returns {Promise<{ workbook: import('exceljs').Workbook, sheetName: string, data: any[][], worksheet: import('exceljs').Worksheet }>}
  */
 async function leerExcelCompleto(rutaArchivo) {
   logger.info(`Leyendo archivo Excel: ${rutaArchivo}`);
@@ -116,16 +149,17 @@ async function leerExcelCompleto(rutaArchivo) {
   });
 
   logger.info(`Filas detectadas en Excel: ${data.length}`);
-  return { workbook, sheetName, data };
+  return { workbook, sheetName, data, worksheet };
 }
 
 
 
 /**
- * Construye la lista de expedientes
+ * Construye la lista de expedientes.
+ * @param {any[][]} data - Matriz por filas (como leerExcelCompleto).
+ * @param {import('exceljs').Worksheet} [worksheet] - Misma hoja: mejora lectura de cabeceras combinadas (columna A).
  */
-
-function buildExpedientesFromData(data) {
+function buildExpedientesFromData(data, worksheet) {
 
   const expedientes = [];
 
@@ -137,91 +171,54 @@ function buildExpedientesFromData(data) {
 
     if (!fila) continue;
 
+    const excelRowNumber = i + 1;
 
     /**
-     * Detectar cambio de circuito
+     * Columna B con formato número/año → fila de dato (no cabecera aunque B repita texto de un merge).
+     * Sin ese formato → puede ser cabecera de circuito si contiene CIRCUITO.
      */
+    if (filaTieneExpediente(fila)) {
+      if (!circuitoActual) {
+        logger.warn(`Fila ${i + 1} ignorada porque no hay circuito activo`);
+        continue;
+      }
 
+      const organoRaw = limpiarTextoExcel(fila[COL_ORGANO]);
+      const expedienteRaw = limpiarTextoExcel(fila[COL_NUMERO_EXPEDIENTE]);
+      const tipoRaw = limpiarTextoExcel(fila[COL_TIPO_EXPEDIENTE]);
+
+      const organo = normalizarOrgano(organoRaw);
+      const tipo = normalizarTipoExpediente(tipoRaw);
+      const expediente = expedienteRaw;
+
+      const expedienteObj = {
+        circuito: circuitoActual,
+        organo,
+        expediente,
+        tipo,
+        numeroExpediente: expediente,
+        tipoExpediente: tipo,
+        filaExcel: i + 1,
+        rowIndex: i
+      };
+
+      expedientes.push(expedienteObj);
+      continue;
+    }
+
+    /**
+     * Sin número de expediente en B: cabecera de circuito o fila vacía/irrelevante.
+     */
     if (filaContieneCircuito(fila)) {
-
-      const primeraCelda = fila[0] != null && String(fila[0]).trim() !== '' ? String(fila[0]).trim() : '';
-      const textoCircuito = primeraCelda || fila.map((c) => (c != null ? String(c) : '')).join(' ').trim();
+      const textoCircuito = textoParaCircuito(worksheet, excelRowNumber, fila);
 
       const circuitoDetectado = extraerTextoCircuito(textoCircuito);
 
       if (circuitoDetectado) {
-
         circuitoActual = circuitoDetectado;
-
         logger.info(`Circuito detectado: ${circuitoActual} (fila ${i + 1})`);
       }
-
-      continue;
     }
-
-
-
-    /**
-     * Filas sin expediente se ignoran
-     */
-
-    if (!filaTieneExpediente(fila)) continue;
-
-
-
-    /**
-     * Si no hay circuito aún, el Excel está mal formado
-     */
-
-    if (!circuitoActual) {
-
-      logger.warn(`Fila ${i + 1} ignorada porque no hay circuito activo`);
-
-      continue;
-    }
-
-
-
-    /**
-     * Lectura de datos
-     */
-
-    const organoRaw = limpiarTextoExcel(fila[COL_ORGANO]);
-    const expedienteRaw = limpiarTextoExcel(fila[COL_NUMERO_EXPEDIENTE]);
-    const tipoRaw = limpiarTextoExcel(fila[COL_TIPO_EXPEDIENTE]);
-
-
-    const organo = normalizarOrgano(organoRaw);
-    const tipo = normalizarTipoExpediente(tipoRaw);
-    const expediente = expedienteRaw;
-
-
-
-    /**
-     * Construcción del objeto expediente
-     */
-
-    const expedienteObj = {
-
-      circuito: circuitoActual,
-
-      organo,
-
-      expediente,
-
-      tipo,
-
-      numeroExpediente: expediente,
-
-      tipoExpediente: tipo,
-
-      filaExcel: i + 1,
-
-      rowIndex: i
-    };
-
-
-    expedientes.push(expedienteObj);
   }
 
 
@@ -238,8 +235,8 @@ function buildExpedientesFromData(data) {
  */
 
 async function leerExpedientesDesdeExcel(rutaArchivo) {
-  const { data } = await leerExcelCompleto(rutaArchivo);
-  return buildExpedientesFromData(data);
+  const { data, worksheet } = await leerExcelCompleto(rutaArchivo);
+  return buildExpedientesFromData(data, worksheet);
 }
 
 

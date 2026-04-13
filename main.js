@@ -88,8 +88,8 @@ ipcMain.handle('cargar-excel', async (event, rutaArchivo) => {
     return { ok: false, error: 'Archivo no encontrado' };
   }
   try {
-    const { workbook, sheetName, data } = await leerExcelCompleto(rutaArchivo);
-    const expedientes = buildExpedientesFromData(data);
+    const { workbook, sheetName, data, worksheet } = await leerExcelCompleto(rutaArchivo);
+    const expedientes = buildExpedientesFromData(data, worksheet);
     excelResultado = { workbook, sheetName, data, rutaOriginal: rutaArchivo };
     return { ok: true, total: expedientes.length, nombre: path.basename(rutaArchivo) };
   } catch (err) {
@@ -113,7 +113,7 @@ ipcMain.handle('ejecutar-revision', async () => {
   if (!worksheet) {
     return { ok: false, error: 'No se encontró la hoja en el Excel' };
   }
-  const expedientes = buildExpedientesFromData(data);
+  const expedientes = buildExpedientesFromData(data, worksheet);
 
   if (expedientes.length === 0) {
     return { ok: false, error: 'No hay expedientes en el Excel' };

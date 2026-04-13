@@ -1,3 +1,5 @@
+Documentación completa del proyecto: ver la carpeta doc/ en la raíz del repositorio.
+
 Icono y logo de la aplicación
 ==============================
 
